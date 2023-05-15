@@ -13,13 +13,12 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-#1、跳跃时，a[l]与a[l+2]维度一致
-#残差块
+# 1. When skipping, the dimensions of a[l] and a[l+2] are consistent.
+# Residual block
 class IdentityBlock(nn.Module):
     def __init__(self, f, filters, stage, block):
         super(IdentityBlock, self).__init__()
-        # conv_name_base = 'res' + str(stage) + block + '_branch'
-        # bn_name_base = 'bn' + str(stage) + block + '_branch'
+        
         F1, F2, F3 = filters
         self.X_shortcut = nn.Identity()
 
@@ -69,13 +68,12 @@ class IdentityBlock(nn.Module):
 
         return X
     
-#2、跳跃时，a[l]与a[l+2]维度不一致，在小路上加上卷积层改变a[l]的维度
-#残差块
+# 2. When skipping, the dimensions of a[l] and a[l+2] are inconsistent. Add a convolutional layer on the shortcut path to change the dimensions of a[l].
+# Residual block
 class ConvolutionalBlock(nn.Module):
     def __init__(self, f, filters, stage, block, stride=2):
         super(ConvolutionalBlock, self).__init__()
-        # conv_name_base = 'res' + str(stage) + block + '_branch'
-        # bn_name_base = 'bn' + str(stage) + block + '_branch'
+        
         F1, F2, F3 = filters
         self.X_shortcut = nn.Identity()
 
@@ -127,7 +125,7 @@ class ConvolutionalBlock(nn.Module):
 
         return X
     
-# 定义ResNet50模型
+# ResNet50——model
 class ResNet50(nn.Module):
     def __init__(self, num_classes=3):
         super(ResNet50, self).__init__()
@@ -187,9 +185,9 @@ class ResNet50(nn.Module):
 
 model = ResNet50()
 
-# ------------------------------------准备数据阶段---------------------------------------
+# ------------------------------------the stage of prepare data---------------------------------------
 
-# 加载数据集
+# load dataset
 train_data = np.load('datasets/train_merged_signal.npy')
 train_label = np.load('datasets/train_labels.npy')
 
@@ -197,7 +195,7 @@ test_data = np.load('datasets/test_merged_signal.npy')
 test_label = np.load('datasets/test_labels.npy')
 print("test_label: ", test_label)
 
-# 将标签中的-1转换为0
+# convert -1 to 0 from labels
 ys_train_orig = np.zeros((train_label.shape[0],), dtype=int)
 for i in range((len(train_label))):
     if train_label[i] == -1:
@@ -212,21 +210,21 @@ for i in range((len(test_label))):
     ys_test_orig[i] = test_label[i][0].astype(int)
 print("ys_test_orig: ", ys_test_orig)
 
-# 将 data，label 换个名字
+# change names of data，label
 X_train, Y_train = train_data, ys_train_orig
 X_test, Y_test = test_data, ys_test_orig
 print("Y_test: ", Y_test)
 
-# 将标签转化为 one-hot 编码
+# convert labels to one-hot 
 enc = OneHotEncoder(categories='auto')
 Y_train = enc.fit_transform(Y_train.reshape(-1, 1)).toarray()
 Y_test = enc.transform(Y_test.reshape(-1, 1)).toarray()
 
-# 扩充 X 的维度
+# Expand the dimensions of X.
 X_train = np.expand_dims(X_train, axis=1)
 X_test = np.expand_dims(X_test, axis=1)
 
-# 转换数据为张量
+# Convert the data to tensors.
 X_train_tensor = torch.from_numpy(X_train).float()
 Y_train_tensor = torch.from_numpy(Y_train).long()
 X_test_tensor = torch.from_numpy(X_test).float()
@@ -240,31 +238,29 @@ print("Y_train_tensor shape: " + str(Y_train_tensor.shape))
 print("X_test_tensor shape: " + str(X_test_tensor.shape))
 print("Y_test_tensor shape: " + str(Y_test_tensor.shape))
 
-# 创建数据集和数据加载器
+# Create a dataset and data loader.
 train_dataset = TensorDataset(X_train_tensor, Y_train_tensor)
 train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
 
 test_dataset = TensorDataset(X_test_tensor, Y_test_tensor)
 test_loader = DataLoader(test_dataset, batch_size=len(test_dataset))
 
-# ------------------------------------训练和测试阶段---------------------------------------
+# ------------------------------------train and test---------------------------------------
 
-#编译模型
+#compile model
 optimizer = torch.optim.Adam(model.parameters(), weight_decay=0.03)
-
-#最后一招
 #optimizer = torch.optim.SGD(model.parameters(), lr=0.001, weight_decay=0.03)
 
 criterion = nn.CrossEntropyLoss()
 
-# 将模型和损失函数移动到GPU上（如果可用）
+# Move the model and the loss function to the GPU (if available).
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 criterion.to(device)
 
 num_epochs = 250
 
-# 训练
+# train
 for epoch in range(num_epochs):
     running_loss = 0.0
     correct = 0
@@ -291,20 +287,19 @@ for epoch in range(num_epochs):
         total += labels.size(0)
 
         correct += predicted.eq(truths).sum().item()
-
-        # 每个 batch 打印 loss 和精度
+        
         print(f"Batch [{batch_idx+1}/{len(train_loader)}], Loss: {loss.item()}, Accuracy: {100 * correct / total}%")
 
     epoch_loss = running_loss / len(train_loader)
     epoch_accuracy = 100 * correct / total
     print(f"Epoch {epoch+1} loss: {epoch_loss}, Accuracy: {epoch_accuracy}%")
 
-# 测试
+# test
 with torch.no_grad():
     for inputs, labels in test_loader:
 
-        inputs = inputs.to(device)  # 将输入数据移动到 CUDA 设备上
-        labels = labels.to(device)  # 将标签数据移动到 CUDA 设备上
+        inputs = inputs.to(device) 
+        labels = labels.to(device)  
 
         outputs = model(inputs)
         test_loss = criterion(outputs, labels.float())
